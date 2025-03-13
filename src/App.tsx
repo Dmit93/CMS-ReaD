@@ -10,9 +10,6 @@ const PluginsPage = lazy(() => import("./pages/settings/plugins"));
 const UsersPage = lazy(() => import("./pages/users"));
 const MediaPage = lazy(() => import("./pages/media"));
 const ContentPage = lazy(() => import("./pages/content"));
-const ContentEditPage = lazy(() => import("./pages/content/edit"));
-const NewContentPage = lazy(() => import("./pages/content/new"));
-const ContentFieldsPage = lazy(() => import("./pages/content/fields"));
 const GeneralSettingsPage = lazy(() => import("./pages/settings/general"));
 
 function App() {
@@ -27,9 +24,6 @@ function App() {
           <Route path="/users" element={<UsersPage />} />
           <Route path="/media" element={<MediaPage />} />
           <Route path="/content" element={<ContentPage />} />
-          <Route path="/content/new" element={<NewContentPage />} />
-          <Route path="/content/edit/:id" element={<ContentEditPage />} />
-          <Route path="/content/fields" element={<ContentFieldsPage />} />
           <Route path="/settings/general" element={<GeneralSettingsPage />} />
           {import.meta.env.VITE_TEMPO === "true" && (
             <Route path="/tempobook/*" />
