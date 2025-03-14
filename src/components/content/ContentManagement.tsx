@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FileText,
   Plus,
@@ -54,112 +55,47 @@ interface ContentManagementProps {
 }
 
 const ContentManagement = ({ initialContent }: ContentManagementProps) => {
-  const defaultContent: ContentItem[] = [
-    {
-      id: "1",
-      title: "Welcome to Our Website",
-      type: "Page",
-      status: "published",
-      author: "John Doe",
-      createdAt: "2023-06-15",
-      updatedAt: "2023-06-15",
-      slug: "/welcome",
-    },
-    {
-      id: "2",
-      title: "About Our Company",
-      type: "Page",
-      status: "published",
-      author: "Jane Smith",
-      createdAt: "2023-06-14",
-      updatedAt: "2023-06-14",
-      slug: "/about",
-    },
-    {
-      id: "3",
-      title: "Latest Product Announcement",
-      type: "Blog Post",
-      status: "published",
-      author: "Mike Johnson",
-      createdAt: "2023-06-13",
-      updatedAt: "2023-06-13",
-      slug: "/blog/product-announcement",
-    },
-    {
-      id: "4",
-      title: "Upcoming Events",
-      type: "Page",
-      status: "draft",
-      author: "Sarah Williams",
-      createdAt: "2023-06-12",
-      updatedAt: "2023-06-12",
-      slug: "/events",
-    },
-    {
-      id: "5",
-      title: "Contact Form",
-      type: "Form",
-      status: "published",
-      author: "John Doe",
-      createdAt: "2023-06-11",
-      updatedAt: "2023-06-11",
-      slug: "/contact",
-    },
-    {
-      id: "6",
-      title: "Product Catalog",
-      type: "Page",
-      status: "scheduled",
-      author: "Jane Smith",
-      createdAt: "2023-06-10",
-      updatedAt: "2023-06-10",
-      slug: "/products",
-    },
-    {
-      id: "7",
-      title: "Customer Testimonials",
-      type: "Page",
-      status: "published",
-      author: "Mike Johnson",
-      createdAt: "2023-06-09",
-      updatedAt: "2023-06-09",
-      slug: "/testimonials",
-    },
-    {
-      id: "8",
-      title: "Privacy Policy",
-      type: "Page",
-      status: "published",
-      author: "Sarah Williams",
-      createdAt: "2023-06-08",
-      updatedAt: "2023-06-08",
-      slug: "/privacy-policy",
-    },
-    {
-      id: "9",
-      title: "How to Get Started",
-      type: "Blog Post",
-      status: "draft",
-      author: "John Doe",
-      createdAt: "2023-06-07",
-      updatedAt: "2023-06-07",
-      slug: "/blog/getting-started",
-    },
-    {
-      id: "10",
-      title: "Old Promotion Page",
-      type: "Page",
-      status: "archived",
-      author: "Jane Smith",
-      createdAt: "2023-05-15",
-      updatedAt: "2023-05-15",
-      slug: "/promotions/spring-2023",
-    },
-  ];
+  const navigate = useNavigate();
+  const [content, setContent] = useState<ContentItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [content, setContent] = useState<ContentItem[]>(
-    initialContent || defaultContent,
-  );
+  useEffect(() => {
+    if (initialContent) {
+      setContent(initialContent);
+      setLoading(false);
+    } else {
+      loadContent();
+    }
+  }, [initialContent]);
+
+  const loadContent = async () => {
+    setLoading(true);
+    try {
+      // Import here to avoid circular dependencies
+      const { ContentDatabase } = await import(
+        "@/lib/services/content-database"
+      );
+      const contentItems = await ContentDatabase.getAllContent();
+
+      // Transform to ContentItem format
+      const formattedContent: ContentItem[] = contentItems.map((item) => ({
+        id: item.id,
+        title: item.title,
+        type: item.type.charAt(0).toUpperCase() + item.type.slice(1), // Capitalize first letter
+        status: item.status as "published" | "draft" | "scheduled" | "archived",
+        author: "Admin", // In a real app, you would get the author name
+        createdAt: new Date(item.createdAt).toISOString().split("T")[0],
+        updatedAt: new Date(item.updatedAt).toISOString().split("T")[0],
+        slug: item.slug,
+      }));
+
+      setContent(formattedContent);
+    } catch (error) {
+      console.error("Failed to load content:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -173,25 +109,64 @@ const ContentManagement = ({ initialContent }: ContentManagementProps) => {
         item.slug.toLowerCase().includes(searchQuery.toLowerCase())),
   );
 
-  const handleDeleteContent = (id: string) => {
-    setContent(content.filter((item) => item.id !== id));
+  const handleDeleteContent = async (id: string) => {
+    try {
+      // Import here to avoid circular dependencies
+      const { ContentDatabase } = await import(
+        "@/lib/services/content-database"
+      );
+      const success = await ContentDatabase.deleteContent(id);
+
+      if (success) {
+        setContent(content.filter((item) => item.id !== id));
+      }
+    } catch (error) {
+      console.error(`Failed to delete content ${id}:`, error);
+    }
   };
 
-  const handleStatusChange = (
+  const handleStatusChange = async (
     id: string,
     newStatus: "published" | "draft" | "scheduled" | "archived",
   ) => {
-    setContent(
-      content.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: newStatus,
-              updatedAt: new Date().toISOString().split("T")[0],
-            }
-          : item,
-      ),
-    );
+    try {
+      // Import here to avoid circular dependencies
+      const { ContentDatabase } = await import(
+        "@/lib/services/content-database"
+      );
+
+      // Get current content
+      const currentContent = await ContentDatabase.getContentById(id);
+      if (!currentContent) return;
+
+      // Update status
+      const updated = await ContentDatabase.saveContent({
+        id,
+        title: currentContent.title,
+        slug: currentContent.slug,
+        type: currentContent.type,
+        status: newStatus,
+        content: currentContent.content,
+        authorId: currentContent.authorId,
+      });
+
+      if (updated) {
+        // Update local state
+        setContent(
+          content.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  status: newStatus,
+                  updatedAt: new Date().toISOString().split("T")[0],
+                }
+              : item,
+          ),
+        );
+      }
+    } catch (error) {
+      console.error(`Failed to update content status ${id}:`, error);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -247,7 +222,7 @@ const ContentManagement = ({ initialContent }: ContentManagementProps) => {
               Create, edit, and manage your website content
             </p>
           </div>
-          <Button>
+          <Button onClick={() => navigate("/content/new")}>
             <Plus className="mr-2 h-4 w-4" />
             Create Content
           </Button>
@@ -340,7 +315,9 @@ const ContentManagement = ({ initialContent }: ContentManagementProps) => {
                           <Eye className="mr-2 h-4 w-4" />
                           View
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => navigate(`/content/edit/${item.id}`)}
+                        >
                           <Edit className="mr-2 h-4 w-4" />
                           Edit
                         </DropdownMenuItem>

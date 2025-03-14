@@ -6,8 +6,13 @@ import { BrowserRouter } from "react-router-dom";
 import { CMSProvider } from "./lib/context/CMSContext";
 import events from "./lib/events";
 
+// Import the dev tools and initialize them
 import { TempoDevtools } from "tempo-devtools";
 TempoDevtools.init();
+
+// Initialize database
+import { initDatabase } from "./lib/services/init-database";
+initDatabase().catch(console.error);
 
 // Emit CMS lifecycle events
 events.emit("cms:beforeRender");

@@ -10,7 +10,7 @@ import {
 } from "./plugin-types";
 import { pluginLoader } from "./plugin-loader";
 import events from "../events";
-import { PluginDB, StoredPlugin } from "../db/plugin-db";
+import { PluginDatabase } from "../services/plugin-database";
 
 export class PluginManager {
   private plugins: Map<string, Plugin> = new Map();
@@ -62,7 +62,7 @@ export class PluginManager {
    */
   private async loadPluginsFromDB(): Promise<void> {
     try {
-      const storedPlugins = await PluginDB.getAllPlugins();
+      const storedPlugins = await PluginDatabase.getAllPlugins();
 
       for (const plugin of storedPlugins) {
         this.pluginStatus.set(plugin.id, {
@@ -70,7 +70,7 @@ export class PluginManager {
           status: plugin.isActive ? PluginStatus.ACTIVE : PluginStatus.INACTIVE,
           installedAt: plugin.installedAt,
           updatedAt: plugin.updatedAt,
-          config: plugin.config || {},
+          config: plugin.config ? JSON.parse(plugin.config) : {},
         });
       }
 
@@ -120,7 +120,7 @@ export class PluginManager {
         this.pluginStatus.set(pluginId, pluginStatus);
 
         // Save to database
-        await PluginDB.savePlugin({
+        await PluginDatabase.savePlugin({
           id: pluginId,
           name: pluginData.name,
           description: pluginData.description,
@@ -202,7 +202,7 @@ export class PluginManager {
       this.pluginStatus.set(pluginId, status);
 
       // Update in database
-      await PluginDB.updatePluginStatus(pluginId, true);
+      await PluginDatabase.updatePluginStatus(pluginId, true);
 
       // Emit after activate event
       events.emit("plugin:afterActivate", pluginId);
@@ -282,7 +282,7 @@ export class PluginManager {
       this.pluginStatus.set(pluginId, status);
 
       // Update in database
-      await PluginDB.updatePluginStatus(pluginId, false);
+      await PluginDatabase.updatePluginStatus(pluginId, false);
 
       // Emit after deactivate event
       events.emit("plugin:afterDeactivate", pluginId);
@@ -320,7 +320,7 @@ export class PluginManager {
         this.pluginStatus.delete(pluginId);
 
         // Remove from database
-        await PluginDB.deletePlugin(pluginId);
+        await PluginDatabase.deletePlugin(pluginId);
 
         // Emit after uninstall event
         events.emit("plugin:afterUninstall", pluginId);
@@ -383,7 +383,7 @@ export class PluginManager {
       this.pluginStatus.set(pluginId, status);
 
       // Update in database
-      await PluginDB.updatePluginConfig(pluginId, config);
+      await PluginDatabase.updatePluginConfig(pluginId, config);
 
       return true;
     } catch (error) {

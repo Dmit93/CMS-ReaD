@@ -11,6 +11,46 @@ datasource db {
 }
 
 model Plugin {
+  id          String    @id
+  name        String
+  description String?
+  version     String
+  author      String
+  category    String?
+  isActive    Boolean   @default(false)
+  installedAt DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  config      String?
+  metadata    ContentMetadata[]
+}
+
+model Content {
+  id        String    @id @default(uuid())
+  title     String
+  slug      String    @unique
+  type      String
+  status    String    @default("draft")
+  content   String?
+  authorId  String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  metadata  ContentMetadata[]
+}
+
+model ContentMetadata {
+  id        String   @id @default(uuid())
+  contentId String
+  pluginId  String
+  metadata  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  content   Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  plugin    Plugin   @relation(fields: [pluginId], references: [id], onDelete: Cascade)
+
+  @@unique([contentId, pluginId])
+}
+
+model Plugin {
   id          String   @id
   name        String
   description String?

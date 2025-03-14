@@ -2,265 +2,346 @@
 /**
  * SEO Toolkit Plugin
  * 
- * Добавляет SEO-функциональность для контента в CMS.
+ * Provides SEO analysis and metadata management for content
  */
 
 class SEOToolkitPlugin {
-    private $db;
-    private $config;
+    private $conn;
+    private $pluginId = 'seo-toolkit';
     
-    public function __construct($db) {
-        $this->db = $db;
-        $this->loadConfig();
+    public function __construct($conn) {
+        $this->conn = $conn;
     }
     
     /**
-     * Загрузка конфигурации плагина из базы данных
+     * Get plugin metadata
      */
-    private function loadConfig() {
-        try {
-            $stmt = $this->db->prepare("SELECT config FROM plugins WHERE id = 'seo-toolkit'");
-            $stmt->execute();
-            $plugin = $stmt->fetch();
-            
-            if ($plugin && !empty($plugin['config'])) {
-                $this->config = json_decode($plugin['config'], true);
-            } else {
-                // Конфигурация по умолчанию
-                $this->config = [
-                    'enabled' => true,
-                    'metaTitleField' => true,
-                    'metaDescriptionField' => true,
-                    'keywordsField' => true,
-                    'ogTagsField' => true,
-                    'twitterCardsField' => true,
-                    'structuredDataField' => false,
-                    'contentTypes' => ['page', 'post']
-                ];
-            }
-        } catch (PDOException $e) {
-            error_log('SEO Toolkit Plugin: ' . $e->getMessage());
-            $this->config = ['enabled' => false];
-        }
+    public function getMetadata() {
+        return [
+            'id' => $this->pluginId,
+            'name' => 'SEO Toolkit',
+            'version' => '1.0.0',
+            'description' => 'Comprehensive SEO tools for optimizing your content',
+            'author' => 'CMS Team',
+            'category' => 'SEO',
+            'settings' => [
+                'default_title_format' => '{title} | {site_name}',
+                'default_description_length' => 160,
+                'enable_social_meta' => true,
+                'enable_schema_markup' => true
+            ]
+        ];
     }
     
     /**
-     * Получение SEO-полей для формы редактирования контента
+     * Initialize the plugin
      */
-    public function getSEOFields() {
-        if (!$this->config['enabled']) {
-            return [];
-        }
+    public function initialize() {
+        // Register hooks
+        add_action('content:beforeCreate', [$this, 'processSEOMetadata']);
+        add_action('content:beforeUpdate', [$this, 'processSEOMetadata']);
+        add_action('content:afterGet', [$this, 'appendSEOMetadata']);
         
-        $fields = [];
-        
-        if ($this->config['metaTitleField']) {
-            $fields[] = [
-                'name' => 'seo_title',
-                'label' => 'SEO Title',
-                'type' => 'text',
-                'description' => 'Заголовок страницы для поисковых систем (рекомендуется 50-60 символов)',
-                'maxLength' => 60
-            ];
-        }
-        
-        if ($this->config['metaDescriptionField']) {
-            $fields[] = [
-                'name' => 'seo_description',
-                'label' => 'Meta Description',
-                'type' => 'textarea',
-                'description' => 'Описание страницы для поисковых систем (рекомендуется 150-160 символов)',
-                'maxLength' => 160
-            ];
-        }
-        
-        if ($this->config['keywordsField']) {
-            $fields[] = [
-                'name' => 'seo_keywords',
-                'label' => 'Meta Keywords',
-                'type' => 'text',
-                'description' => 'Ключевые слова, разделенные запятыми',
-            ];
-        }
-        
-        if ($this->config['ogTagsField']) {
-            $fields[] = [
-                'name' => 'og_title',
-                'label' => 'Open Graph Title',
-                'type' => 'text',
-                'description' => 'Заголовок для социальных сетей',
-            ];
-            
-            $fields[] = [
-                'name' => 'og_description',
-                'label' => 'Open Graph Description',
-                'type' => 'textarea',
-                'description' => 'Описание для социальных сетей',
-            ];
-            
-            $fields[] = [
-                'name' => 'og_image',
-                'label' => 'Open Graph Image',
-                'type' => 'media',
-                'description' => 'Изображение для социальных сетей (рекомендуемый размер 1200x630)',
-            ];
-        }
-        
-        if ($this->config['twitterCardsField']) {
-            $fields[] = [
-                'name' => 'twitter_card',
-                'label' => 'Twitter Card Type',
-                'type' => 'select',
-                'options' => [
-                    'summary' => 'Summary',
-                    'summary_large_image' => 'Summary with Large Image',
-                ],
-                'description' => 'Тип карточки Twitter',
-            ];
-        }
-        
-        if ($this->config['structuredDataField']) {
-            $fields[] = [
-                'name' => 'structured_data',
-                'label' => 'Structured Data (JSON-LD)',
-                'type' => 'code',
-                'language' => 'json',
-                'description' => 'Структурированные данные в формате JSON-LD',
-            ];
-        }
-        
-        return $fields;
+        // Register admin pages
+        add_admin_page('SEO Settings', 'seo-settings', [$this, 'renderSettingsPage']);
     }
     
     /**
-     * Получение SEO-метаданных для контента
+     * Process SEO metadata before content is saved
      */
-    public function getSEOMetadata($contentId) {
-        if (!$this->config['enabled']) {
-            return [];
+    public function processSEOMetadata($content) {
+        // Extract SEO fields from content if they exist
+        if (isset($content['seo'])) {
+            $seoData = $content['seo'];
+            $contentId = $content['id'];
+            
+            // Save SEO metadata to database
+            $this->saveSEOMetadata($contentId, $seoData);
+            
+            // Remove SEO data from content to prevent duplication
+            unset($content['seo']);
         }
+        
+        return $content;
+    }
+    
+    /**
+     * Append SEO metadata to content when retrieved
+     */
+    public function appendSEOMetadata($content) {
+        if (!isset($content['id'])) {
+            return $content;
+        }
+        
+        $contentId = $content['id'];
+        $seoData = $this->getSEOMetadata($contentId);
+        
+        if ($seoData) {
+            $content['seo'] = $seoData;
+        } else {
+            // Generate default SEO metadata if none exists
+            $content['seo'] = $this->generateDefaultSEOMetadata($content);
+        }
+        
+        return $content;
+    }
+    
+    /**
+     * Save SEO metadata to database
+     */
+    private function saveSEOMetadata($contentId, $seoData) {
+        // Begin transaction
+        $this->conn->begin_transaction();
         
         try {
-            $stmt = $this->db->prepare("SELECT meta_key, meta_value FROM content_meta WHERE content_id = ? AND meta_key LIKE 'seo_%' OR meta_key LIKE 'og_%' OR meta_key LIKE 'twitter_%' OR meta_key = 'structured_data'");
-            $stmt->execute([$contentId]);
-            $metaRows = $stmt->fetchAll();
-            
-            $metadata = [];
-            foreach ($metaRows as $row) {
-                $metadata[$row['meta_key']] = $row['meta_value'];
+            foreach ($seoData as $key => $value) {
+                // Use REPLACE INTO to handle both insert and update
+                $stmt = $this->conn->prepare("REPLACE INTO content_metadata (content_id, plugin_id, meta_key, meta_value) VALUES (?, ?, ?, ?)");
+                $stmt->bind_param("ssss", $contentId, $this->pluginId, $key, $value);
+                $stmt->execute();
+                $stmt->close();
             }
             
-            return $metadata;
-        } catch (PDOException $e) {
-            error_log('SEO Toolkit Plugin: ' . $e->getMessage());
-            return [];
+            // Commit transaction
+            $this->conn->commit();
+            return true;
+        } catch (Exception $e) {
+            // Rollback on error
+            $this->conn->rollback();
+            error_log("SEO Toolkit: Failed to save metadata - " . $e->getMessage());
+            return false;
         }
     }
     
     /**
-     * Генерация HTML-кода для мета-тегов
+     * Get SEO metadata from database
      */
-    public function generateMetaTags($contentId) {
-        if (!$this->config['enabled']) {
-            return '';
+    private function getSEOMetadata($contentId) {
+        $stmt = $this->conn->prepare("SELECT meta_key, meta_value FROM content_metadata WHERE content_id = ? AND plugin_id = ?");
+        $stmt->bind_param("ss", $contentId, $this->pluginId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        $metadata = [];
+        while ($row = $result->fetch_assoc()) {
+            $metadata[$row['meta_key']] = $row['meta_value'];
         }
         
-        $metadata = $this->getSEOMetadata($contentId);
-        if (empty($metadata)) {
-            return '';
-        }
-        
-        $html = "<!-- SEO Meta Tags -->\n";
-        
-        // Основные мета-теги
-        if (isset($metadata['seo_title'])) {
-            $html .= "<title>" . htmlspecialchars($metadata['seo_title']) . "</title>\n";
-        }
-        
-        if (isset($metadata['seo_description'])) {
-            $html .= "<meta name=\"description\" content=\"" . htmlspecialchars($metadata['seo_description']) . "\">\n";
-        }
-        
-        if (isset($metadata['seo_keywords'])) {
-            $html .= "<meta name=\"keywords\" content=\"" . htmlspecialchars($metadata['seo_keywords']) . "\">\n";
-        }
-        
-        // Open Graph теги
-        if (isset($metadata['og_title']) || isset($metadata['og_description']) || isset($metadata['og_image'])) {
-            $html .= "\n<!-- Open Graph / Facebook -->\n";
-            
-            if (isset($metadata['og_title'])) {
-                $html .= "<meta property=\"og:title\" content=\"" . htmlspecialchars($metadata['og_title']) . "\">\n";
-            }
-            
-            if (isset($metadata['og_description'])) {
-                $html .= "<meta property=\"og:description\" content=\"" . htmlspecialchars($metadata['og_description']) . "\">\n";
-            }
-            
-            if (isset($metadata['og_image'])) {
-                $html .= "<meta property=\"og:image\" content=\"" . htmlspecialchars($metadata['og_image']) . "\">\n";
-            }
-            
-            $html .= "<meta property=\"og:type\" content=\"website\">\n";
-        }
-        
-        // Twitter Card теги
-        if (isset($metadata['twitter_card'])) {
-            $html .= "\n<!-- Twitter -->\n";
-            $html .= "<meta name=\"twitter:card\" content=\"" . htmlspecialchars($metadata['twitter_card']) . "\">\n";
-            
-            if (isset($metadata['og_title'])) {
-                $html .= "<meta name=\"twitter:title\" content=\"" . htmlspecialchars($metadata['og_title']) . "\">\n";
-            }
-            
-            if (isset($metadata['og_description'])) {
-                $html .= "<meta name=\"twitter:description\" content=\"" . htmlspecialchars($metadata['og_description']) . "\">\n";
-            }
-            
-            if (isset($metadata['og_image'])) {
-                $html .= "<meta name=\"twitter:image\" content=\"" . htmlspecialchars($metadata['og_image']) . "\">\n";
-            }
-        }
-        
-        // Structured Data
-        if (isset($metadata['structured_data'])) {
-            $html .= "\n<!-- Structured Data -->\n";
-            $html .= "<script type=\"application/ld+json\">\n";
-            $html .= $metadata['structured_data'] . "\n";
-            $html .= "</script>\n";
-        }
-        
-        return $html;
+        $stmt->close();
+        return $metadata;
     }
     
     /**
-     * Анализ SEO-оптимизации контента
+     * Generate default SEO metadata based on content
      */
-    public function analyzeSEO($contentId, $content) {
-        if (!$this->config['enabled']) {
-            return ['score' => 0, 'issues' => ['SEO-плагин отключен']];
+    private function generateDefaultSEOMetadata($content) {
+        $settings = $this->getPluginSettings();
+        
+        $title = isset($content['title']) ? $content['title'] : '';
+        $description = '';
+        
+        // Extract description from content if available
+        if (isset($content['content'])) {
+            $plainText = strip_tags($content['content']);
+            $description = substr($plainText, 0, $settings['default_description_length'] ?? 160);
+            if (strlen($plainText) > ($settings['default_description_length'] ?? 160)) {
+                $description .= '...';
+            }
         }
         
-        $metadata = $this->getSEOMetadata($contentId);
+        return [
+            'meta_title' => $title,
+            'meta_description' => $description,
+            'meta_keywords' => '',
+            'og_title' => $title,
+            'og_description' => $description,
+            'og_image' => '',
+            'twitter_title' => $title,
+            'twitter_description' => $description,
+            'twitter_image' => '',
+            'canonical_url' => '',
+            'robots' => 'index,follow'
+        ];
+    }
+    
+    /**
+     * Get plugin settings
+     */
+    private function getPluginSettings() {
+        $defaultSettings = $this->getMetadata()['settings'];
+        $projectId = $_ENV['PROJECT_ID'] ?? 'default';
+        
+        $stmt = $this->conn->prepare("SELECT setting_key, setting_value FROM plugin_settings WHERE plugin_id = ? AND project_id = ?");
+        $stmt->bind_param("ss", $this->pluginId, $projectId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        $settings = $defaultSettings;
+        while ($row = $result->fetch_assoc()) {
+            $settings[$row['setting_key']] = $row['setting_value'];
+        }
+        
+        $stmt->close();
+        return $settings;
+    }
+    
+    /**
+     * Render settings page
+     */
+    public function renderSettingsPage() {
+        $settings = $this->getPluginSettings();
+        
+        // This would be a proper HTML form in a real implementation
+        echo '<div class="seo-settings-page">';
+        echo '<h1>SEO Toolkit Settings</h1>';
+        
+        echo '<form id="seo-settings-form">';
+        echo '<div class="form-group">';
+        echo '<label for="default_title_format">Default Title Format</label>';
+        echo '<input type="text" id="default_title_format" name="default_title_format" value="' . htmlspecialchars($settings['default_title_format']) . '">';
+        echo '<p class="help-text">Available variables: {title}, {site_name}, {separator}</p>';
+        echo '</div>';
+        
+        echo '<div class="form-group">';
+        echo '<label for="default_description_length">Default Description Length</label>';
+        echo '<input type="number" id="default_description_length" name="default_description_length" value="' . intval($settings['default_description_length']) . '">';
+        echo '</div>';
+        
+        echo '<div class="form-group">';
+        echo '<label for="enable_social_meta">Enable Social Media Metadata</label>';
+        echo '<input type="checkbox" id="enable_social_meta" name="enable_social_meta"' . ($settings['enable_social_meta'] ? ' checked' : '') . '>';
+        echo '</div>';
+        
+        echo '<div class="form-group">';
+        echo '<label for="enable_schema_markup">Enable Schema Markup</label>';
+        echo '<input type="checkbox" id="enable_schema_markup" name="enable_schema_markup"' . ($settings['enable_schema_markup'] ? ' checked' : '') . '>';
+        echo '</div>';
+        
+        echo '<button type="submit" class="button button-primary">Save Settings</button>';
+        echo '</form>';
+        echo '</div>';
+        
+        // Add JavaScript for form submission
+        echo '<script>
+            document.getElementById("seo-settings-form").addEventListener("submit", function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this);
+                const settings = {};
+                
+                for (const [key, value] of formData.entries()) {
+                    settings[key] = value;
+                }
+                
+                // Handle checkboxes
+                settings.enable_social_meta = document.getElementById("enable_social_meta").checked;
+                settings.enable_schema_markup = document.getElementById("enable_schema_markup").checked;
+                
+                // Send settings to server
+                fetch("/api/plugins.php", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        plugin_id: "seo-toolkit",
+                        project_id: "' . ($_ENV['PROJECT_ID'] ?? 'default') . '",
+                        settings: settings
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert("Settings saved successfully");
+                    } else {
+                        alert("Failed to save settings: " + data.error);
+                    }
+                })
+                .catch(error => {
+                    alert("Error: " + error);
+                });
+            });
+        </script>';
+    }
+    
+    /**
+     * Analyze content for SEO issues
+     */
+    public function analyzeSEO($content, $seoData) {
         $issues = [];
-        $score = 0;
-        $maxScore = 0;
+        $score = 100;
         
-        // Проверка наличия и длины мета-заголовка
-        if ($this->config['metaTitleField']) {
-            $maxScore += 20;
-            if (!isset($metadata['seo_title']) || empty($metadata['seo_title'])) {
-                $issues[] = 'Отсутствует SEO-заголовок';
-            } elseif (strlen($metadata['seo_title']) < 30) {
-                $issues[] = 'SEO-заголовок слишком короткий (рекомендуется 50-60 символов)';
-                $score += 10;
-            } elseif (strlen($metadata['seo_title']) > 60) {
-                $issues[] = 'SEO-заголовок слишком длинный (рекомендуется 50-60 символов)';
-                $score += 10;
-            } else {
-                $score += 20;
+        // Check title length
+        if (empty($seoData['meta_title'])) {
+            $issues[] = ['type' => 'error', 'message' => 'Meta title is missing'];
+            $score -= 15;
+        } elseif (strlen($seoData['meta_title']) < 30) {
+            $issues[] = ['type' => 'warning', 'message' => 'Meta title is too short (less than 30 characters)'];
+            $score -= 5;
+        } elseif (strlen($seoData['meta_title']) > 60) {
+            $issues[] = ['type' => 'warning', 'message' => 'Meta title is too long (more than 60 characters)'];
+            $score -= 5;
+        }
+        
+        // Check description
+        if (empty($seoData['meta_description'])) {
+            $issues[] = ['type' => 'error', 'message' => 'Meta description is missing'];
+            $score -= 15;
+        } elseif (strlen($seoData['meta_description']) < 70) {
+            $issues[] = ['type' => 'warning', 'message' => 'Meta description is too short (less than 70 characters)'];
+            $score -= 5;
+        } elseif (strlen($seoData['meta_description']) > 160) {
+            $issues[] = ['type' => 'warning', 'message' => 'Meta description is too long (more than 160 characters)'];
+            $score -= 5;
+        }
+        
+        // Check keywords
+        if (empty($seoData['meta_keywords'])) {
+            $issues[] = ['type' => 'info', 'message' => 'Meta keywords are missing (not critical for SEO)'];
+        }
+        
+        // Check content length
+        $contentText = strip_tags($content['content'] ?? '');
+        $wordCount = str_word_count($contentText);
+        
+        if ($wordCount < 300) {
+            $issues[] = ['type' => 'warning', 'message' => 'Content is too short (less than 300 words)'];
+            $score -= 10;
+        }
+        
+        // Check if title appears in content
+        if (!empty($seoData['meta_title']) && !empty($contentText)) {
+            if (stripos($contentText, $seoData['meta_title']) === false) {
+                $issues[] = ['type' => 'info', 'message' => 'Meta title does not appear in content'];
+                $score -= 3;
             }
         }
         
-        // Проверка наличия и длины мета-описания
-        if ($this->config['metaDescriptionField'])
+        // Ensure score is between 0 and 100
+        $score = max(0, min(100, $score));
+        
+        return [
+            'score' => $score,
+            'issues' => $issues,
+            'word_count' => $wordCount
+        ];
+    }
+}
+
+// Helper functions for hooks (would be part of a real plugin system)
+function add_action($hook, $callback) {
+    // This would register a callback for a specific hook
+    // Implementation depends on the CMS's event system
+}
+
+function add_admin_page($title, $slug, $callback) {
+    // This would register an admin page
+    // Implementation depends on the CMS's admin system
+}
+
+// Initialize the plugin when included
+$seoToolkit = new SEOToolkitPlugin($conn);
+$seoToolkit->initialize();
+
+// Return plugin metadata for registration
+return $seoToolkit->getMetadata();
