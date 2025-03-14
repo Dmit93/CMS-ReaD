@@ -1,0 +1,70 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Plugin {
+  id          String   @id
+  name        String
+  description String?
+  version     String
+  author      String
+  category    String?
+  isActive    Boolean  @default(false)
+  installedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  config      String?  // JSON string for plugin configuration
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  password  String
+  role      String   @default("user") // admin, editor, author, contributor, viewer
+  status    String   @default("pending") // active, inactive, pending
+  lastLogin DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Content {
+  id          String   @id @default(uuid())
+  title       String
+  slug        String   @unique
+  type        String   // page, post, form, etc.
+  status      String   @default("draft") // published, draft, scheduled, archived
+  content     String?  @db.Text
+  metadata    String?  @db.Text // JSON string for SEO and other metadata
+  authorId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Media {
+  id          String   @id @default(uuid())
+  name        String
+  type        String   // image, video, document, audio, archive
+  url         String
+  size        Int
+  dimensions  String?  // JSON string for width x height
+  uploadedBy  String
+  tags        String?  // Comma-separated tags
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SystemSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

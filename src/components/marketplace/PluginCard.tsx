@@ -11,6 +11,18 @@ import {
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 
+export interface PluginData {
+  id: string;
+  name: string;
+  description: string;
+  author: string;
+  rating: number;
+  downloads: number;
+  category: string;
+  version: string;
+  imageUrl: string;
+}
+
 interface PluginCardProps {
   id?: string;
   name?: string;
@@ -21,7 +33,7 @@ interface PluginCardProps {
   category?: string;
   version?: string;
   imageUrl?: string;
-  onInstall?: (id: string) => void;
+  onInstall?: (plugin: PluginData) => void;
 }
 
 const PluginCard = ({
@@ -74,7 +86,17 @@ const PluginCard = ({
   };
 
   const handleInstall = () => {
-    onInstall(id);
+    onInstall({
+      id,
+      name,
+      description,
+      author,
+      rating,
+      downloads,
+      category,
+      version,
+      imageUrl,
+    });
   };
 
   return (

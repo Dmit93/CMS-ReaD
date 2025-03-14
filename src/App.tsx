@@ -11,6 +11,7 @@ const UsersPage = lazy(() => import("./pages/users"));
 const MediaPage = lazy(() => import("./pages/media"));
 const ContentPage = lazy(() => import("./pages/content"));
 const GeneralSettingsPage = lazy(() => import("./pages/settings/general"));
+const PluginSystemPage = lazy(() => import("./pages/settings/plugin-system"));
 
 function App() {
   return (
@@ -25,6 +26,10 @@ function App() {
           <Route path="/media" element={<MediaPage />} />
           <Route path="/content" element={<ContentPage />} />
           <Route path="/settings/general" element={<GeneralSettingsPage />} />
+          <Route
+            path="/settings/plugin-system"
+            element={<PluginSystemPage />}
+          />
           {import.meta.env.VITE_TEMPO === "true" && (
             <Route path="/tempobook/*" />
           )}

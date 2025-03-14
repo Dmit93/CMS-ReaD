@@ -1,49 +1,6 @@
 type EventCallback = (...args: any[]) => void;
 
-type EventMap = {
-  // Lifecycle events
-  "cms:beforeInit": [];
-  "cms:afterInit": [];
-  "cms:beforeRender": [];
-  "cms:afterRender": [];
-
-  // Content events
-  "content:beforeCreate": [content: any];
-  "content:afterCreate": [content: any];
-  "content:beforeUpdate": [content: any, newContent: any];
-  "content:afterUpdate": [content: any];
-  "content:beforeDelete": [contentId: string];
-  "content:afterDelete": [contentId: string];
-
-  // Media events
-  "media:beforeUpload": [file: File];
-  "media:afterUpload": [media: any];
-  "media:beforeDelete": [mediaId: string];
-  "media:afterDelete": [mediaId: string];
-
-  // User events
-  "user:beforeLogin": [credentials: any];
-  "user:afterLogin": [user: any];
-  "user:beforeLogout": [user: any];
-  "user:afterLogout": [];
-
-  // Plugin events
-  "plugin:beforeInstall": [pluginId: string];
-  "plugin:afterInstall": [plugin: any];
-  "plugin:beforeUninstall": [pluginId: string];
-  "plugin:afterUninstall": [pluginId: string];
-  "plugin:beforeActivate": [pluginId: string];
-  "plugin:afterActivate": [plugin: any];
-  "plugin:beforeDeactivate": [pluginId: string];
-  "plugin:afterDeactivate": [pluginId: string];
-
-  // Custom events can be added by plugins
-  [key: string]: any[];
-};
-
-type EventName = keyof EventMap;
-
-class EventSystem {
+export class EventSystem {
   private listeners: Map<string, Set<EventCallback>> = new Map();
 
   /**
@@ -52,19 +9,16 @@ class EventSystem {
    * @param callback The callback function to execute when the event is triggered
    * @returns A function to unsubscribe from the event
    */
-  on<T extends EventName>(
-    event: T,
-    callback: (...args: EventMap[T]) => void,
-  ): () => void {
+  on(event: string, callback: EventCallback): () => void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
 
-    this.listeners.get(event)?.add(callback as EventCallback);
+    this.listeners.get(event)?.add(callback);
 
     // Return unsubscribe function
     return () => {
-      this.off(event, callback as EventCallback);
+      this.off(event, callback);
     };
   }
 
@@ -74,16 +28,13 @@ class EventSystem {
    * @param callback The callback function to execute when the event is triggered
    * @returns A function to unsubscribe from the event
    */
-  once<T extends EventName>(
-    event: T,
-    callback: (...args: EventMap[T]) => void,
-  ): () => void {
+  once(event: string, callback: EventCallback): () => void {
     const onceCallback = (...args: any[]) => {
       this.off(event, onceCallback);
-      (callback as EventCallback)(...args);
+      callback(...args);
     };
 
-    return this.on(event, onceCallback as any);
+    return this.on(event, onceCallback);
   }
 
   /**
@@ -91,13 +42,10 @@ class EventSystem {
    * @param event The event name to unsubscribe from
    * @param callback The callback function to remove
    */
-  off<T extends EventName>(
-    event: T,
-    callback: (...args: EventMap[T]) => void,
-  ): void {
+  off(event: string, callback: EventCallback): void {
     const callbacks = this.listeners.get(event);
     if (callbacks) {
-      callbacks.delete(callback as EventCallback);
+      callbacks.delete(callback);
       if (callbacks.size === 0) {
         this.listeners.delete(event);
       }
@@ -109,7 +57,7 @@ class EventSystem {
    * @param event The event name to trigger
    * @param args The arguments to pass to the event callbacks
    */
-  emit<T extends EventName>(event: T, ...args: EventMap[T]): void {
+  emit(event: string, ...args: any[]): void {
     const callbacks = this.listeners.get(event);
     if (callbacks) {
       callbacks.forEach((callback) => {
@@ -127,7 +75,7 @@ class EventSystem {
    * @param event The event name to check
    * @returns True if the event has listeners, false otherwise
    */
-  hasListeners(event: EventName): boolean {
+  hasListeners(event: string): boolean {
     const callbacks = this.listeners.get(event);
     return !!callbacks && callbacks.size > 0;
   }
@@ -137,7 +85,7 @@ class EventSystem {
    * @param event The event name to check
    * @returns The number of listeners for the event
    */
-  listenerCount(event: EventName): number {
+  listenerCount(event: string): number {
     const callbacks = this.listeners.get(event);
     return callbacks ? callbacks.size : 0;
   }
@@ -146,7 +94,7 @@ class EventSystem {
    * Remove all listeners for an event or all events
    * @param event Optional event name to clear listeners for
    */
-  removeAllListeners(event?: EventName): void {
+  removeAllListeners(event?: string): void {
     if (event) {
       this.listeners.delete(event);
     } else {

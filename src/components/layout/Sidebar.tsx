@@ -88,6 +88,11 @@ const Sidebar = ({ defaultCollapsed = false }: SidebarProps) => {
       label: "Admin Settings",
       path: "/settings",
     },
+    {
+      icon: <Store size={20} />,
+      label: "Plugin System",
+      path: "/settings/plugin-system",
+    },
   ];
 
   return (
